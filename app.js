@@ -28,7 +28,18 @@ const createRLInterface = ()=>{
 };
 
 async function macro(page) {
+    let naverIDList = [];
+
     let emailList = '';
+
+    fs.readFile('./naver_id.txt', 'utf8', (err, data)=>{
+        let array = data.split('\r\n');
+        array.forEach(element=>{
+             let idPwd = element.split('/');
+             let obj = {id: idPwd[0], pwd: idPwd[1]};
+             naverIDList.push(obj);
+        });
+    });
     fs.readFile('./list.txt', 'utf8', (err, data)=>{
         emailList = data.split('\n');
     });
@@ -37,25 +48,31 @@ async function macro(page) {
         message = data;
     });
 
-    await page.goto('https://www.naver.com');
-    const login = await page.$('.link_login');
-    await login.click();
-    await page.waitForNavigation();
-
-    await page.evaluate(`document.getElementById('id').value = '${ID}'`);
-    await page.evaluate(`document.getElementById('pw').value = '${PW}'`);
-
- /*   await page.$eval('#id', (el, id) => {
-        return el.value = id;
-    }, ID);
-    await page.$eval('#pw', (el, pwd) => {
-        return el.value = pwd;
-    }, PW);*/
-    await page.click('.btn_global');
-    await page.waitForNavigation();
-    await page.click('.btn_cancel');
+    await page.waitFor(1000);
+    console.log(naverIDList);
 
     for(let i = 0; i < emailList.length; i++) {
+        await page.goto('https://www.naver.com');
+        const login = await page.$('.link_login');
+        await login.click();
+        await page.waitForNavigation();
+
+        let random = Math.floor(Math.random() * naverIDList.length);
+        const {id, pwd} = naverIDList[random];
+
+        await page.evaluate(`document.getElementById('id').value = '${id}'`);
+        await page.evaluate(`document.getElementById('pw').value = '${pwd}'`);
+
+        /*   await page.$eval('#id', (el, id) => {
+               return el.value = id;
+           }, ID);
+           await page.$eval('#pw', (el, pwd) => {
+               return el.value = pwd;
+           }, PW);*/
+        await page.click('.btn_global');
+        await page.waitForNavigation();
+        await page.click('.btn_cancel');
+
         let email = emailList[i];
         console.log(email);
         await page.goto('https://mail.naver.com');
@@ -71,47 +88,43 @@ async function macro(page) {
         await page.waitFor(2000);
         await page.evaluate(`document.getElementById('sendBtn').click();`);
         await page.waitFor(intervalMin * 60 * 1000);
-
+        await page.goto('https://nid.naver.com/nidlogin.logout?returl=https%3A%2F%2Fwww.naver.com');
+        await page.waitFor(3000);
     }
+    console.log('메일 전송이 모두 완료되었습니다.');
 };
 
-let ID = '', PW = '', title;
+let title;
 let intervalMin = '';
-console.log('네이버 아이디를 입력해주세요.');
+
+
+console.log('송신할 메일의 제목을 입력해주세요.(보낼 이메일 주소 목록은 list.txt, 메일 내용은 mail.txt 파일을 통해 참조)');
 const rl = createRLInterface();
 rl.on('line', line=>{
-    ID = line;
+    title = line;
+
     rl.close();
 
+    console.log('송신할 분 간격을 숫자로 입력해주세요.(첫번째 메일부터 순서대로 송신합니다.)');
     const rl2 = createRLInterface();
-    console.log('비밀번호를 입력해주세요.');
-
     rl2.on('line', line=>{
-        PW = line;
+        intervalMin = parseInt(line);
         rl2.close();
+        process.platform != 'darwin' ?
+            puppeteer.launch({headless: true,
+                executablePath: './node_modules\\puppeteer\\.local-chromium\\win64-782078\\chrome-win\\chrome.exe'}).then(browser=>{
+                return browser.newPage().then(page=>{
+                    macro(page);
 
-        console.log('송신할 메일의 제목을 입력해주세요.(보낼 이메일 주소 목록은 list.txt, 메일 내용은 mail.txt 파일을 통해 참조)');
-        const rl3 = createRLInterface();
-        rl3.on('line', line=>{
-            title = line;
+                    return page;
+                });//.then(()=>browser.close());
+            }) : puppeteer.launch({headless: false}).then(browser=>{
+                return browser.newPage().then(page=>{
+                    macro(page);
 
-            rl3.close();
-
-            console.log('송신할 분 간격을 숫자로 입력해주세요.(첫번째 메일부터 순서대로 송신합니다.)');
-            const rl4 = createRLInterface();
-            rl4.on('line', line=>{
-                intervalMin = parseInt(line);
-                rl4.close();
-                puppeteer.launch({headless: false,
-                    executablePath: './node_modules\\puppeteer\\.local-chromium\\win64-782078\\chrome-win\\chrome.exe'}).then(browser=>{
-                    return browser.newPage().then(page=>{
-                        macro(page);
-
-                        return page;
-                    });//.then(()=>browser.close());
-                });
-            });
-        });
+                    return page;
+                });//.then(()=>browser.close());
+            })
     });
 })
 module.exports = app;
